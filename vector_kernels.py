@@ -1,7 +1,9 @@
 import numpy as np
 
-def lin(X, Y):
-    return X.dot(Y.T)
+def linear():
+    def kernel(X, Y):
+        return X.dot(Y.T)
+    return kernel
 
 def gauss(sigma):
     def kernel(X, Y):
