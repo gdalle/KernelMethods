@@ -1,5 +1,6 @@
 import os
 import datetime
+import itertools
 import tqdm
 
 import numpy as np
@@ -33,23 +34,57 @@ def read_data_mat(dataset="tr0", suffix="mat100"):
         return np.array(X), 2 * np.array(Y.iloc[:, 0]) - 1
 
 
+def build_datasets(suffix="mat100"):
+    datasets = []
+    for k in [0, 1, 2]:
+        Xtr, Ytr = read_data_mat(dataset="tr" + str(k), suffix=suffix)
+        Xte = read_data_mat("te" + str(k), suffix=suffix)
+        datasets.append([Xtr, Ytr, Xte])
+    return datasets
+
+
 def compute_predictor(
     Xtr, Ytr,
     kernel, lambd,
-    method="svm", solver="qp"
+    method="svm", solver="qp",
+    center=True
 ):
     n = len(Xtr)
+    n_plus = np.sum(Ytr == 1)
+    n_minus = np.sum(Ytr == -1)
 
-    K = kernel.apply(Xtr, Xtr) + 1e-10 * np.eye(n)
+    K = kernel.apply(Xtr, Xtr)
+
+    if center:
+        gamma = (
+            (Ytr == 1).astype(int) * (0.5 / n_plus) +
+            (Ytr == -1).astype(int) * (0.5 / n_minus)
+        )
+        u = K.dot(gamma)
+        v = np.tile(u, (n, 1))
+        w = gamma.dot(u)
+        Kc = K - v - v.T + w
+    else:
+        Kc = K
+    Kc += 1e-10 * np.eye(n)
 
     if method == "svm":
-        alpha = kernel_svm(K, Ytr, lambd, solver=solver)
+        alpha = kernel_svm(Kc, Ytr, lambd, solver=solver)
 
     elif method == "logreg":
-        alpha = kernel_logreg(K, Ytr, lambd)
+        alpha = kernel_logreg(Kc, Ytr, lambd)
 
     def predictor(x_new):
-        return np.sign(alpha.dot(kernel.apply(Xtr, x_new)))
+        Kx = kernel.apply(x_new, Xtr)
+        f = Kx.dot(alpha)
+        if center:
+            f += (
+                - alpha.sum() * (gamma.reshape((1, -1)) * Kx).sum(axis=1)
+                - alpha.reshape((1, -1)).dot(K).dot(gamma)
+                + alpha.sum() * gamma.reshape((1, -1)).dot(K).dot(gamma)
+            )
+        return np.sign(f)
+
     return predictor
 
 
@@ -111,7 +146,7 @@ def lineplotCI(x, y, train=True, log=False):
         plt.scatter([param] * y.shape[1], y[i], color=color, alpha=0.5)
 
 
-def plot_CV_results(acc_train, acc_val, param_range, param_name):
+def plot_CV_results(acc_train, acc_val, param_range, param_name, title):
     plt.figure()
     lineplotCI(
         param_range, acc_train,
@@ -124,22 +159,79 @@ def plot_CV_results(acc_train, acc_val, param_range, param_name):
     plt.legend()
     plt.xlabel("Value of {}".format(param_name))
     plt.ylabel("Accuracy")
-    plt.title("Cross-validation results")
+    plt.title("CV - {}".format(title))
     plt.show()
 
 
+def tune_parameters(
+    suffix,
+    kernels, lambdas,
+    method="svm", solver="qp",
+    kfold=5, shuffle=True,
+    plot=False, all_stats=False
+):
+    datasets = build_datasets(suffix)
+
+    kernels_lambdas = list(itertools.product(kernels, lambdas))
+    acc_train = np.empty((3, len(kernels), len(lambdas), kfold))
+    acc_val = np.empty((3, len(kernels), len(lambdas), kfold))
+
+    best_kernels = [None for d in range(3)]
+    best_lambdas = [None for d in range(3)]
+
+    for d, data in enumerate(datasets):
+        Xtr, Ytr, Xte = data
+        for i, kernel in enumerate(kernels):
+            for j in tqdm.trange(
+                len(lambdas),
+                desc="Tuning lambda on dataset {} with kernel {} and params {}".format(
+                    d, kernel.name, kernel.params
+                )
+            ):
+                lambd = lambdas[j]
+                acc_train[d, i, j], acc_val[d, i, j] = cross_validate(
+                    Xtr, Ytr,
+                    kernel, lambd,
+                    method=method, solver=solver,
+                    kfold=kfold, shuffle=shuffle
+                )
+
+            if plot:
+                plot_CV_results(
+                    acc_train[d, i], acc_val[d, i],
+                    lambdas, "lambda",
+                    "dataset {} with kernel {} and params {}".format(
+                        d, kernel.name, kernel.params
+                    )
+                )
+
+        acc = acc_val[d].mean(axis=-1)
+        i_max, j_max = np.unravel_index(
+            np.ndarray.argmax(acc), acc.shape
+        )
+        best_kernels[d] = kernels[i_max]
+        best_lambdas[d] = lambdas[j_max]
+
+    if all_stats:
+        return best_kernels, best_lambdas, acc_train, acc_val
+    else:
+        return best_kernels, best_lambdas
+
+
 def final_prediction(
-    dataset,
+    suffix,
     best_kernel, best_lambd,
     method="svm", solver="qp"
 ):
+    datasets = build_datasets(suffix=suffix)
+
     Ypred = []
     training_precisions = []
 
     for d in [0, 1, 2]:
-        print("DATASET {}".format(d+1))
+        print("DATASET {}".format(d))
 
-        Xtr, Ytr, Xte = dataset[d]
+        Xtr, Ytr, Xte = datasets[d]
 
         f = compute_predictor(
             Xtr, Ytr,
@@ -170,9 +262,10 @@ def final_prediction(
     )
 
     with open(os.path.join("predictions", date2 + "__params.txt"), "w") as file:
-        file.write("PREDICTION LOG : {}\n".format(date))
+        file.write("PREDICTION LOG - {}\n".format(date))
+        file.write("Suffix: {}\n".format(suffix))
         for d in range(3):
-            file.write("Dataset " + str(d+1) + "\n")
+            file.write("Dataset " + str(d) + "\n")
             file.write("    " + str(best_kernel[d]) + "\n")
             file.write("    " + "Lambda " + str(best_lambd[d]) + "\n")
             file.write("    " + "Training precision " + str(training_precisions[d]) + "\n")
