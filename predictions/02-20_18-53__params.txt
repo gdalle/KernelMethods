@@ -1,0 +1,13 @@
+PREDICTION LOG : 02-20 18:53
+Dataset 1
+    Kernel linear - Parameters {}
+    Lambda 0.0517947467923121
+    Training precision 0.808
+Dataset 2
+    Kernel linear - Parameters {}
+    Lambda 0.019306977288832496
+    Training precision 0.943
+Dataset 3
+    Kernel linear - Parameters {}
+    Lambda 0.019306977288832496
+    Training precision 0.9055
