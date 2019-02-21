@@ -34,26 +34,26 @@ def read_data_mat(dataset="tr0", suffix="mat100"):
         return np.array(X), 2 * np.array(Y.iloc[:, 0]) - 1
 
 
-def build_datasets(suffix="mat100"):
+def build_datasets(suffix="mat100", indices=[0,1,2]):
     datasets = []
-    for k in [0, 1, 2]:
+    for k in indices:
         Xtr, Ytr = read_data_mat(dataset="tr" + str(k), suffix=suffix)
         Xte = read_data_mat("te" + str(k), suffix=suffix)
         datasets.append([Xtr, Ytr, Xte])
     return datasets
 
 
-def compute_predictor(
-    Xtr, Ytr,
+def compute_prediction(
     kernel, lambd,
     method="svm", solver="qp",
     center=True
 ):
-    n = len(Xtr)
+    Ytr = kernel.Ytr
+    n = Ytr.shape[0]
     n_plus = np.sum(Ytr == 1)
     n_minus = np.sum(Ytr == -1)
 
-    K = kernel.apply(Xtr, Xtr)
+    K = kernel.train_matrix
 
     if center:
         gamma = (
@@ -74,8 +74,7 @@ def compute_predictor(
     elif method == "logreg":
         alpha = kernel_logreg(Kc, Ytr, lambd)
 
-    def predictor(x_new):
-        Kx = kernel.apply(x_new, Xtr)
+    def predictor(Kx):
         f = Kx.dot(alpha)
         if center:
             f += (
@@ -85,11 +84,12 @@ def compute_predictor(
             )
         return np.sign(f)
 
-    return predictor
+    K_test = kernel.test_matrix
+
+    return predictor(K), predictor(K_test)
 
 
 def cross_validate(
-    X, Y,
     kernel, lambd,
     method="svm", solver="qp",
     kfold=5, shuffle=True
@@ -97,30 +97,25 @@ def cross_validate(
     acc_train, acc_val = np.zeros(kfold), np.zeros(kfold)
 
     # jointly shuffle input datasets X, Y
-    n = X.shape[0]
+    n = kernel.Ytr.shape[0]
     if shuffle:
         perm = np.random.permutation(n)
-        X, Y = X[perm], Y[perm]
+        kernel = kernel.split_train_validation(perm, [])
     idx = np.arange(n)
     for k in range(kfold):
         # split the datasets
         val_idx = idx[k::kfold]
         train_idx = np.delete(idx, val_idx)
 
-        Xtr = X[train_idx]
-        Ytr = Y[train_idx]
-        Xte = X[val_idx]
-        Yte = Y[val_idx]
+        sub_kernel = kernel.split_train_validation(train_idx, val_idx)
+        Ytr = sub_kernel.Ytr
+        Yte = kernel.Ytr[val_idx]
 
         # fit the predictor
-        f = compute_predictor(
-            Xtr, Ytr,
-            kernel, lambd,
-            method, solver
+        Ytr_pred, Yte_pred = compute_prediction(
+            sub_kernel,
+            lambd, method, solver
         )
-
-        Ytr_pred = f(Xtr).reshape(-1)
-        Yte_pred = f(Xte).reshape(-1)
 
         # compute precision
         acc_train[k] = np.mean(Ytr == Ytr_pred)
@@ -170,79 +165,66 @@ def tune_parameters(
     kfold=5, shuffle=True,
     plot=False, all_stats=False
 ):
-    datasets = build_datasets(suffix)
 
     kernels_lambdas = list(itertools.product(kernels, lambdas))
-    acc_train = np.empty((3, len(kernels), len(lambdas), kfold))
-    acc_val = np.empty((3, len(kernels), len(lambdas), kfold))
+    acc_train = np.empty((len(kernels), len(lambdas), kfold))
+    acc_val = np.empty((len(kernels), len(lambdas), kfold))
 
-    best_kernels = [None for d in range(3)]
-    best_lambdas = [None for d in range(3)]
+    for i, kernel in enumerate(kernels):
+        for j in tqdm.trange(
+            len(lambdas),
+            desc="Tuning lambda on dataset {} with kernel {} and params {}".format(
+                kernel.dataset_index, kernel.name, kernel.params
+            )
+        ):
+            lambd = lambdas[j]
+            acc_train[i, j], acc_val[i, j] = cross_validate(
+                kernel, lambd,
+                method=method, solver=solver,
+                kfold=kfold, shuffle=shuffle
+            )
 
-    for d, data in enumerate(datasets):
-        Xtr, Ytr, Xte = data
-        for i, kernel in enumerate(kernels):
-            for j in tqdm.trange(
-                len(lambdas),
-                desc="Tuning lambda on dataset {} with kernel {} and params {}".format(
-                    d, kernel.name, kernel.params
+        if plot:
+            plot_CV_results(
+                acc_train[i], acc_val[i],
+                lambdas, "lambda",
+                "dataset {} with kernel {} and params {}".format(
+                    kernel.dataset_index, kernel.name, kernel.params
                 )
-            ):
-                lambd = lambdas[j]
-                acc_train[d, i, j], acc_val[d, i, j] = cross_validate(
-                    Xtr, Ytr,
-                    kernel, lambd,
-                    method=method, solver=solver,
-                    kfold=kfold, shuffle=shuffle
-                )
+            )
 
-            if plot:
-                plot_CV_results(
-                    acc_train[d, i], acc_val[d, i],
-                    lambdas, "lambda",
-                    "dataset {} with kernel {} and params {}".format(
-                        d, kernel.name, kernel.params
-                    )
-                )
-
-        acc = acc_val[d].mean(axis=-1)
-        i_max, j_max = np.unravel_index(
-            np.ndarray.argmax(acc), acc.shape
-        )
-        best_kernels[d] = kernels[i_max]
-        best_lambdas[d] = lambdas[j_max]
+    acc = acc_val.mean(axis=-1)
+    j_max = acc.argmax(axis=1)
+    best_lambdas = lambdas[j_max]
 
     if all_stats:
-        return best_kernels, best_lambdas, acc_train, acc_val
+        return best_lambdas, acc_train, acc_val
     else:
-        return best_kernels, best_lambdas
+        return best_lambdas
 
 
 def final_prediction(
     suffix,
-    best_kernel, best_lambd,
+    kernels, best_lambdas,
     method="svm", solver="qp"
 ):
-    datasets = build_datasets(suffix=suffix)
 
     Ypred = []
     training_precisions = []
 
-    for d in [0, 1, 2]:
+    for i in range(len(kernels)):
+        d = kernels[i].dataset_index
         print("DATASET {}".format(d))
 
-        Xtr, Ytr, Xte = datasets[d]
-
-        f = compute_predictor(
-            Xtr, Ytr,
-            best_kernel[d], best_lambd[d],
+        # fit the predictor
+        Ytr_pred, Yte_pred = compute_prediction(
+            kernels[i], best_lambdas[i],
             method, solver
         )
 
-        training_precisions.append(np.mean(Ytr == f(Xtr)))
+        training_precisions.append(np.mean(kernels[i].Ytr == Ytr_pred))
 
-        Yte = f(Xte)
-        Ypred.extend(list(((Yte + 1) / 2).astype(int)))
+        Ypred.extend(list(((Yte_pred + 1) / 2).astype(int)))
 
     Ypred = pd.Series(
         index=np.arange(len(Ypred)),
@@ -264,8 +246,8 @@ def final_prediction(
     with open(os.path.join("predictions", date2 + "__params.txt"), "w") as file:
         file.write("PREDICTION LOG - {}\n".format(date))
         file.write("Suffix: {}\n".format(suffix))
-        for d in range(3):
-            file.write("Dataset " + str(d) + "\n")
-            file.write("    " + str(best_kernel[d]) + "\n")
-            file.write("    " + "Lambda " + str(best_lambd[d]) + "\n")
-            file.write("    " + "Training precision " + str(training_precisions[d]) + "\n")
+        for i in range(len(kernels)):
+            file.write("Dataset " + str(kernels[i].dataset_index) + "\n")
+            file.write("    " + str(kernels[i]) + "\n")
+            file.write("    " + "Lambda " + str(best_lambdas[i]) + "\n")
+            file.write("    " + "Training precision " + str(training_precisions[i]) + "\n")

@@ -1,4 +1,9 @@
+import copy
+
 import numpy as np
+import pandas as pd
+
+import backend
 
 
 class Kernel:
@@ -6,7 +11,43 @@ class Kernel:
     def __init__(self, name, params):
         self.name = name
         self.params = params
-
+        self.dataset_index = -1
+        self.need_dataset = True
+        self.train_matrix = None
+        self.text_matrix = None
+        self.Ytr = None
+    
+    def apply(self, X, Y):
+        """ Return the matrix K(X, Y) """
+        raise NotImplementedError()
+    
+    def load(self, suffix, indices):
+        """Given a data suffix, computes the kernel matrices for each dataset"""
+        kernels = []
+        datasets = backend.build_datasets(suffix, indices)
+        for d, data in enumerate(datasets):
+            self.dataset_index = d
+            Xtr, Ytr, Xte = data
+            k = copy.deepcopy(self)
+            if self.need_dataset:
+                k.train_matrix = k.apply(Xtr, Xtr)
+                k.test_matrix = k.apply(Xte, Xtr)
+            else:
+                k.train_matrix = Xtr
+                k.test_matrix = Xte
+            k.Ytr = Ytr
+            kernels.append(k)
+    
+        return kernels
+       
+    def split_train_validation(self, train_idx, val_idx):
+        """ Splits train_matrix for the cross_validation into train and test matrices """
+        k = Kernel("Sub-kernel", {})
+        k.train_matrix = self.train_matrix[train_idx, :][:, train_idx]
+        k.test_matrix  = self.train_matrix[val_idx, :][:, train_idx]
+        k.Ytr = self.Ytr[train_idx]
+        return k
+    
     def __str__(self):
         return "Kernel {} - Parameters {}".format(self.name, str(self.params))
 
@@ -40,7 +81,8 @@ class GaussianKernel(Kernel):
         return result
 
 
-class CSVKernel:
+class CSVKernel(Kernel):
 
-    def __init__(self, path):
-        self.ma
+    def __init__(self, name, params):
+        super().__init__(name, params)
+        self.need_dataset = False
