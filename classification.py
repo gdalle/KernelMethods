@@ -46,6 +46,44 @@ def kernel_svm(K, Ytr, lambd, solver="qp"):
     return alpha_opt
 
 
+def projection_simplex(y):
+    D = len(y)
+    u = np.sort(y)[::-1]
+    U = np.cumsum(u)
+    rho = None
+    for j in range(1, D+1):
+        if u[j-1] + (1 - U[j-1]) / j > 0:
+            rho = j
+    lambd = (1 / rho) * (1 - U[rho-1])
+    return np.clip(y + lambd, a_min=0, a_max=None)
+
+
+def multiple_kernel_svm(
+    K_list, Ytr,
+    lambd,
+    grad_step=1, iterations=10,
+    solver="qp"
+):
+    M = len(K_list)
+    if M == 1:
+        return 1, kernel_svm(K_list[0], Ytr, lambd, solver)
+    eta = np.ones(M) / M
+    if type(grad_step) == type(lambda x: 1):
+        steps = [grad_step(it) for it in range(iterations)]
+    else:
+        steps = grad_step * np.ones(iterations)
+    for it in range(iterations):
+        K = sum(eta[i] * K_list[i] for i in range(M))
+        alpha = kernel_svm(K, Ytr, lambd, solver)
+        for i in range(M):
+            grad_eta_i = - lambd * alpha.reshape((1, -1)).dot(K_list[i]).dot(alpha)
+            eta[i] -= steps[i] * grad_eta_i
+        eta = projection_simplex(eta)
+    K = sum(eta[i] * K_list[i] for i in range(M))
+    alpha = kernel_svm(K, Ytr, lambd, solver)
+    return eta, alpha
+
+
 def sigma(x):
     return 1 / (1 + np.exp(-x))
 

@@ -1,0 +1,16 @@
+PREDICTION LOG - 02-24 21:30
+Dataset 0
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'spectr6', 'trans6'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'trans6'}], 'grad_step': 1, 'iterations': 10, 'kernel_weights': array([0., 1., 0.])}
+    Lambda 0.01
+    Training precision 0.9365
+Dataset 1
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'spectr6', 'trans6'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'trans6'}], 'grad_step': 1, 'iterations': 10, 'kernel_weights': array([0., 1., 0.])}
+    Lambda 0.01
+    Training precision 0.9725
+Dataset 2
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'spectr6', 'trans6'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'trans6'}], 'grad_step': 1, 'iterations': 10, 'kernel_weights': array([0.24001964, 0.50822428, 0.25175608])}
+    Lambda 0.0001
+    Training precision 1.0

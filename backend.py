@@ -9,8 +9,6 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
-from classification import kernel_svm, kernel_logreg
-
 
 def read_data_mat(dataset="tr0", suffix="mat100"):
     folder = "data"
@@ -34,59 +32,42 @@ def read_data_mat(dataset="tr0", suffix="mat100"):
         return np.array(X), 2 * np.array(Y.iloc[:, 0]) - 1
 
 
-def build_datasets(suffix="mat100", indices=[0,1,2]):
+def build_datasets(suffix="mat100", indices=[0, 1, 2]):
     datasets = []
     for k in indices:
         Xtr, Ytr = read_data_mat(dataset="tr" + str(k), suffix=suffix)
-        Xte = read_data_mat("te" + str(k), suffix=suffix)
+        Xte = read_data_mat(dataset="te" + str(k), suffix=suffix)
         datasets.append([Xtr, Ytr, Xte])
     return datasets
 
 
-def compute_prediction(
-    kernel, lambd,
-    method="svm", solver="qp",
-    center=True
-):
-    Ytr = kernel.Ytr
+def center_K(K, Ytr):
     n = Ytr.shape[0]
     n_plus = np.sum(Ytr == 1)
     n_minus = np.sum(Ytr == -1)
+    gamma = (
+        (Ytr == 1).astype(int) * (0.5 / n_plus) +
+        (Ytr == -1).astype(int) * (0.5 / n_minus)
+    )
+    u = K.dot(gamma)
+    v = np.tile(u, (n, 1))
+    w = gamma.dot(u)
+    Kc = K - v - v.T + w
+    return Kc
 
-    K = kernel.train_matrix
 
-    if center:
-        gamma = (
-            (Ytr == 1).astype(int) * (0.5 / n_plus) +
-            (Ytr == -1).astype(int) * (0.5 / n_minus)
-        )
-        u = K.dot(gamma)
-        v = np.tile(u, (n, 1))
-        w = gamma.dot(u)
-        Kc = K - v - v.T + w
-    else:
-        Kc = K
-    Kc += 1e-10 * np.eye(n)
-
-    if method == "svm":
-        alpha = kernel_svm(Kc, Ytr, lambd, solver=solver)
-
-    elif method == "logreg":
-        alpha = kernel_logreg(Kc, Ytr, lambd)
-
-    def predictor(Kx):
-        f = Kx.dot(alpha)
-        if center:
-            f += (
-                - alpha.sum() * (gamma.reshape((1, -1)) * Kx).sum(axis=1)
-                - alpha.reshape((1, -1)).dot(K).dot(gamma)
-                + alpha.sum() * gamma.reshape((1, -1)).dot(K).dot(gamma)
-            )
-        return np.sign(f)
-
-    K_test = kernel.test_matrix
-
-    return predictor(K), predictor(K_test)
+def correct_prediction_centering(K, Kx, Ytr, alpha):
+    n_plus = np.sum(Ytr == 1)
+    n_minus = np.sum(Ytr == -1)
+    gamma = (
+        (Ytr == 1).astype(int) * (0.5 / n_plus) +
+        (Ytr == -1).astype(int) * (0.5 / n_minus)
+    )
+    return (
+        - alpha.sum() * (gamma.reshape((1, -1)) * Kx).sum(axis=1)
+        - alpha.reshape((1, -1)).dot(K).dot(gamma)
+        + alpha.sum() * gamma.reshape((1, -1)).dot(K).dot(gamma)
+    )
 
 
 def cross_validate(
@@ -112,8 +93,7 @@ def cross_validate(
         Yte = kernel.Ytr[val_idx]
 
         # fit the predictor
-        Ytr_pred, Yte_pred = compute_prediction(
-            sub_kernel,
+        Ytr_pred, Yte_pred = sub_kernel.compute_prediction(
             lambd, method, solver
         )
 
@@ -159,11 +139,10 @@ def plot_CV_results(acc_train, acc_val, param_range, param_name, title):
 
 
 def tune_parameters(
-    suffix,
     kernels, lambdas,
     method="svm", solver="qp",
     kfold=5, shuffle=True,
-    plot=False, all_stats=False
+    plot=False, result="choose_kernel_lambda"
 ):
 
     kernels_lambdas = list(itertools.product(kernels, lambdas))
@@ -188,41 +167,44 @@ def tune_parameters(
             plot_CV_results(
                 acc_train[i], acc_val[i],
                 lambdas, "lambda",
-                "dataset {} with kernel {} and params {}".format(
-                    kernel.dataset_index, kernel.name, kernel.params
+                "dataset {} with {}".format(
+                    kernel.dataset_index, kernel.name
                 )
             )
 
     acc = acc_val.mean(axis=-1)
-    j_max = acc.argmax(axis=1)
-    best_lambdas = lambdas[j_max]
 
-    if all_stats:
-        return best_lambdas, acc_train, acc_val
-    else:
+    if result == "best_kernel_lambda":
+        (i_max, j_max) = np.unravel_index(np.argmax(acc), acc.shape)
+        best_kernel = kernels[i_max]
+        best_lambd = lambdas[j_max]
+        return (best_kernel, best_lambd)
+    elif result == "best_lambdas":
+        j_max = acc.argmax(axis=1)
+        best_lambdas = lambdas[j_max]
         return best_lambdas
+    elif result == "all_stats":
+        return acc_train, acc_val
 
 
 def final_prediction(
-    suffix,
-    kernels, best_lambdas,
+    three_kernels, three_lambdas,
     method="svm", solver="qp"
 ):
 
     Ypred = []
     training_precisions = []
 
-    for i in range(len(kernels)):
-        d = kernels[i].dataset_index
+    for d in range(3):
         print("DATASET {}".format(d))
 
         # fit the predictor
-        Ytr_pred, Yte_pred = compute_prediction(
-            kernels[i], best_lambdas[i],
+        Ytr_pred, Yte_pred = three_kernels[d].compute_prediction(
+            three_lambdas[d],
             method, solver
         )
 
-        training_precisions.append(np.mean(kernels[i].Ytr == Ytr_pred))
+        training_precisions.append(np.mean(three_kernels[d].Ytr == Ytr_pred))
 
         Ypred.extend(list(((Yte_pred + 1) / 2).astype(int)))
 
@@ -245,9 +227,9 @@ def final_prediction(
 
     with open(os.path.join("predictions", date2 + "__params.txt"), "w") as file:
         file.write("PREDICTION LOG - {}\n".format(date))
-        file.write("Suffix: {}\n".format(suffix))
-        for i in range(len(kernels)):
-            file.write("Dataset " + str(kernels[i].dataset_index) + "\n")
-            file.write("    " + str(kernels[i]) + "\n")
-            file.write("    " + "Lambda " + str(best_lambdas[i]) + "\n")
-            file.write("    " + "Training precision " + str(training_precisions[i]) + "\n")
+        for d in range(3):
+            file.write("Dataset " + str(three_kernels[d].dataset_index) + "\n")
+            file.write("    " + "Kernel name: " + str(three_kernels[d].name) + "\n")
+            file.write("    " + "Kernel params: " + str(three_kernels[d].params) + "\n")
+            file.write("    " + "Lambda " + str(three_lambdas[d]) + "\n")
+            file.write("    " + "Training precision " + str(training_precisions[d]) + "\n")
