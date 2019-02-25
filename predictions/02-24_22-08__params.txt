@@ -1,0 +1,16 @@
+PREDICTION LOG - 02-24 22:08
+Dataset 0
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'SpectralKernel6', 'SpectralKernel3', 'TranslatedKernel', 'SubstringKernel'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'spectr3'}, {'suffix': 'trans6'}, {'suffix': 'substring4_0.7'}], 'grad_step': 0.5, 'iterations': 10, 'kernel_weights': array([0., 1., 0., 0., 0.])}
+    Lambda 0.011787686347935873
+    Training precision 0.9265
+Dataset 1
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'SpectralKernel6', 'SpectralKernel3', 'TranslatedKernel'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'spectr3'}, {'suffix': 'trans6'}], 'grad_step': 0.5, 'iterations': 10, 'kernel_weights': array([0.        , 0.79153613, 0.        , 0.20846387])}
+    Lambda 0.0517947467923121
+    Training precision 0.88
+Dataset 2
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'SpectralKernel6', 'SpectralKernel3', 'TranslatedKernel'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'spectr3'}, {'suffix': 'trans6'}], 'grad_step': 0.5, 'iterations': 10, 'kernel_weights': array([0., 1., 0., 0.])}
+    Lambda 0.011787686347935873
+    Training precision 0.949
