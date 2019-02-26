@@ -77,9 +77,9 @@ def multiple_kernel_svm(
         alpha = kernel_svm(K, Ytr, lambd, solver)
         for i in range(M):
             grad_eta_i = - lambd * alpha.reshape((1, -1)).dot(K_list[i]).dot(alpha)
-            eta[i] -= steps[i] * grad_eta_i
+            eta[i] -= steps[it] * grad_eta_i
         eta = projection_simplex(eta)
-        print(eta)
+        print("Eta", eta)
     K = sum(eta[i] * K_list[i] for i in range(M))
     alpha = kernel_svm(K, Ytr, lambd, solver)
     return eta, alpha

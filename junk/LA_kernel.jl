@@ -1,15 +1,19 @@
+using ProgressMeter
+using CSV
+using DataFrames
+
 open("data/Xtr0.csv") do file
     global lines = readlines(file)
 end
 popfirst!(lines)
 
 function S(a::Char, b::Char)
-    return convert(Float64, a==b)
+    return 10 * convert(Float64, a==b) - 9
 end
 
-beta = 1.
-d = 1.
-e = 1.
+beta = 1
+d = 1
+e = 10
 
 function K(x::String, y::String)
     n::Int64 = length(x)
@@ -36,5 +40,24 @@ function K(x::String, y::String)
             Y2[:, j] = M[:, j-1] + X2[:, j-1] + Y2[:, j-1]
         end
     end
-    return 1 + X2[n, m] + Y2[n, m] + M[n, m]
+    return log(1 + X2[n, m] + Y2[n, m] + M[n, m]) / beta
 end
+
+K(lines[1], lines[1])
+
+L = length(lines[1:10])
+gram = zeros(Float64, L, L)
+@showprogress for a in 1:L, b in 1:a
+    gram[a, b] = K(lines[a], lines[b])
+end
+df = DataFrame(gram)
+CSV.write("LA_0_gram.csv", df)
+
+
+L
+
+df
+
+gram
+
+K(lines[1], lines[1])
