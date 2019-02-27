@@ -1,0 +1,16 @@
+PREDICTION LOG - 02-27 00:00
+Dataset 0
+    Kernel name: SubstringKernel
+    Kernel params: {'suffix': 'substring4_0.7'}
+    Lambda 0.046415888336127795
+    Training precision 0.675
+Dataset 0
+    Kernel name: SubstringKernel
+    Kernel params: {'suffix': 'substring4_0.7'}
+    Lambda 0.01291549665014884
+    Training precision 0.7345
+Dataset 0
+    Kernel name: SpectralKernel6
+    Kernel params: {'suffix': 'spectr6'}
+    Lambda 0.05623413251903491
+    Training precision 1.0

@@ -142,7 +142,7 @@ def tune_parameters(
     kernels, lambdas,
     method="svm", solver="qp",
     kfold=5, shuffle=True,
-    plot=False, result="choose_kernel_lambda"
+    plot=False, result="best_lambdas"
 ):
 
     kernels_lambdas = list(itertools.product(kernels, lambdas))

@@ -62,6 +62,7 @@ def multiple_kernel_svm(
     K_list, Ytr,
     lambd,
     grad_step=1, iterations=10,
+    entropic_regularization=0,
     solver="qp"
 ):
     M = len(K_list)
