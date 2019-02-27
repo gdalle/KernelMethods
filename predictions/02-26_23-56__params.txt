@@ -1,0 +1,16 @@
+PREDICTION LOG - 02-26 23:56
+Dataset 0
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'SpectralKernel6', 'MarginalizedCountKernel2'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'HMM_MCK2'}], 'grad_step': 0.5, 'iterations': 0, 'kernel_weights': array([0.33333333, 0.33333333, 0.33333333])}
+    Lambda 0.007742636826811269
+    Training precision 0.878
+Dataset 1
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'SpectralKernel6', 'MarginalizedCountKernel2'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'HMM_MCK2'}], 'grad_step': 0.5, 'iterations': 0, 'kernel_weights': array([0.33333333, 0.33333333, 0.33333333])}
+    Lambda 0.007742636826811269
+    Training precision 0.9255
+Dataset 2
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['LinearKernel', 'SpectralKernel6', 'MarginalizedCountKernel2'], 'kernel_params': [{'suffix': 'mat100'}, {'suffix': 'spectr6'}, {'suffix': 'HMM_MCK2'}], 'grad_step': 0.5, 'iterations': 0, 'kernel_weights': array([0.33333333, 0.33333333, 0.33333333])}
+    Lambda 0.001
+    Training precision 0.9945
