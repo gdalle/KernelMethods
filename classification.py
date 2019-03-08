@@ -1,6 +1,7 @@
 import tqdm
 
 import numpy as np
+from scipy import linalg
 import scipy.sparse as sp
 
 import cvxpy as cp
@@ -62,7 +63,7 @@ def multiple_kernel_svm(
     K_list, Ytr,
     lambd,
     grad_step=1, iterations=10,
-    entropic_regularization=0,
+    entropic=0,
     solver="qp"
 ):
     M = len(K_list)
@@ -78,6 +79,7 @@ def multiple_kernel_svm(
         alpha = kernel_svm(K, Ytr, lambd, solver)
         for i in range(M):
             grad_eta_i = - lambd * alpha.reshape((1, -1)).dot(K_list[i]).dot(alpha)
+            grad_eta_i += entropic * np.log(eta[i]+1e-10) # Entropic regularization
             eta[i] -= steps[it] * grad_eta_i
         eta = projection_simplex(eta)
         print("Eta", eta)
@@ -109,3 +111,52 @@ def kernel_logreg(K, Ytr, lambd, iterations=10):
         z = m + Ytr / sigma(-Ytr * m)
         alpha = solve_WKRR(K, w, z, lambd)
     return alpha
+
+def base_kernel_learner(K0, D, Xtr, Ytr, Xte):
+    # A base kernel is basically K_w = w.dot(w.T) with w a vector
+    # The kernel is thus K(x, y) = (x.w) (y.w)
+    A = K0.test_matrix.T
+    B = (Ytr * Ytr.T) * D
+    K = K0.test_test_matrix
+    m = K.shape[0]-1
+    eg = linalg.eigh(A.T.dot(B).dot(A), K, eigvals=(m,m))
+    # Generalized eigenvector with the largest eigenvalue
+    v = eg[1][:, 0]
+    w = (v * Xte.T).T.sum(axis=0)
+    w = (w / np.linalg.norm(w))
+    return w
+
+def kernel_boosting(K0, Xtr, Ytr, Xte, steps):
+    """
+    Xtr and Xte are vectorized representations of the dataset
+    K0 is an empty vector kernel
+    """
+    K0.train_matrix = K0.apply(Xtr, Xtr) + 1e-10*np.eye(Xtr.shape[0])
+    K0.test_matrix = K0.apply(Xte, Xtr)
+    K0.test_test_matrix = K0.apply(Xte, Xte) + 1e-10*np.eye(Xte.shape[0])
+    Ktr = 0
+    Kte = 0
+    Ytr = Ytr.reshape((-1,1))
+    for t in tqdm.tqdm(range(steps)):
+        # Compute a distribution over the weights
+        D = np.exp(-(Ytr * Ytr.T) * Ktr) # ExpLoss
+        # Compute the next update for train and test
+        w = base_kernel_learner(K0, D, Xtr, Ytr, Xte)
+        Xtrw = Xtr.dot(w).reshape((-1,1))
+        Ktr_t = Xtrw.dot(Xtrw.T)
+        Xtew = Xte.dot(w).reshape((-1,1))
+        Kte_t = Xtew.dot(Xtrw.T)
+        # Compute the update rate
+        Sp = (Ytr * Ytr.T) * Ktr_t > 0
+        Sm = (Ytr * Ytr.T) * Ktr_t < 0
+        Wp = np.sum(D[Sp] * np.abs(Ktr_t[Sp]))
+        Wm = np.sum(D[Sm] * np.abs(Ktr_t[Sm]))
+        alpha = 0.5 * np.log(Wp / Wm)
+        # Execute the update
+        Ktr += alpha * Ktr_t + 1e-10*np.eye(Xtr.shape[0])
+        Kte += alpha * Kte_t
+        M = Ktr.max()
+        Ktr /= M
+        Kte /= M
+        #print(linalg.eigh(Ktr, eigvals=(0,0))[0])
+    return Ktr, Kte

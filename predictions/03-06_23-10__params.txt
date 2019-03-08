@@ -1,0 +1,16 @@
+PREDICTION LOG - 03-06 23:10
+Dataset 0
+    Kernel name: CauchyKernel
+    Kernel params: {'sigma': 0.05, 'suffix': 'spectr5'}
+    Lambda 0.01
+    Training precision 0.82
+Dataset 0
+    Kernel name: CauchyKernel
+    Kernel params: {'sigma': 0.1, 'suffix': 'spectr5'}
+    Lambda 0.01
+    Training precision 0.997
+Dataset 0
+    Kernel name: CauchyKernel
+    Kernel params: {'sigma': 0.5, 'suffix': 'spectr5'}
+    Lambda 0.01
+    Training precision 1.0

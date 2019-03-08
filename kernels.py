@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 import backend
-from classification import kernel_svm, multiple_kernel_svm, kernel_logreg
+from classification import kernel_svm, multiple_kernel_svm, kernel_logreg, kernel_boosting
 
 
 class Kernel:
@@ -14,8 +14,9 @@ class Kernel:
         self.params = params
         self.dataset_index = -1
         self.csv_storage = "data"  # or "features" or "gram"
-        self.train_matrix = None
-        self.text_matrix = None
+        self.train_matrix = None # K(Xtr, Xtr)
+        self.test_matrix = None # K(Xte, Xtr)
+        self.test_test_matrix = None # K(Xte, Xte)
         self.Ytr = None
 
     def __str__(self):
@@ -121,6 +122,24 @@ class GaussianKernel(Kernel):
         )
         return result
 
+class CauchyKernel(Kernel):
+
+    def __init__(self, sigma):
+        super().__init__("CauchyKernel", {"sigma": sigma})
+
+    def apply(self, X, Y):
+        if len(X.shape) == 1:
+            X = X.reshape((1, -1))
+        if len(Y.shape) == 1:
+            Y = Y.reshape((1, -1))
+        norm_X = np.linalg.norm(X, axis=1).reshape((-1, 1))
+        norm_Y = np.linalg.norm(Y, axis=1).reshape((-1, 1))
+        scal = X.dot(Y.T)
+        result = 1 / (1 +
+            (norm_X**2 - 2*scal + norm_Y.T**2) * self.params["sigma"]**2
+        )
+        return result
+
 
 class GramCSVKernel(Kernel):
 
@@ -138,16 +157,18 @@ class FeatureCSVKernel(Kernel):
 
 class MultipleKernel(Kernel):
 
-    def __init__(self, loaded_kernels, grad_step=1, iterations=10):
+    def __init__(self, loaded_kernels, grad_step=1, iterations=10, entropic=0):
         params = {
             "kernel_names": [kernel.name for kernel in loaded_kernels],
             "kernel_params": [kernel.params for kernel in loaded_kernels],
             "grad_step": grad_step,
             "iterations": iterations,
+            "entropic": entropic,
         }
         super().__init__("MultipleKernel", params)
         self.grad_step = grad_step
         self.iterations = iterations
+        self.entropic = entropic
         self.dataset_index = loaded_kernels[0].dataset_index
         self.Ytr = loaded_kernels[0].Ytr
         self.M = len(loaded_kernels)
@@ -171,7 +192,8 @@ class MultipleKernel(Kernel):
             subkernels.append(k)
         return MultipleKernel(
             subkernels,
-            grad_step=self.grad_step, iterations=self.iterations
+            grad_step=self.grad_step, iterations=self.iterations,
+            entropic=self.entropic
         )
 
     def compute_prediction(
@@ -182,6 +204,7 @@ class MultipleKernel(Kernel):
             self.train_list, self.Ytr,
             lambd,
             grad_step=self.grad_step, iterations=self.iterations,
+            entropic=self.entropic,
             solver=solver
         )
         self.params["kernel_weights"] = eta
@@ -192,3 +215,36 @@ class MultipleKernel(Kernel):
             return np.sign(Kx.dot(alpha))
 
         return predictor(train_matrix), predictor(test_matrix)
+
+class BoostingKernel(Kernel):
+    
+    def __init__(self, vector_kernel=LinearKernel(), iterations=20):
+        self.vector_kernel = vector_kernel
+        self.iterations = iterations
+        self.csv_storage = "features"
+        params = {
+            "vector_kernel": vector_kernel.name,
+            "iterations": iterations,
+        }
+        super().__init__("BoostingKernel", params)
+    
+    def load(self, suffix, indices):
+        """Given a data suffix, computes the kernel matrices for each dataset"""
+        kernels = []
+        datasets = backend.build_datasets(suffix, indices)
+        for d, data in enumerate(datasets):
+            self.dataset_index = d
+            Xtr, Ytr, Xte = data
+            k = copy.deepcopy(self)
+            m = Xtr.mean(axis=0)
+            s = Xtr.std(axis=0)
+            s[s < 1e-10] = 1
+            Xtr = (Xtr - m) / s
+            Xte = (Xte - m) / s
+            Ktr, Kte = kernel_boosting(self.vector_kernel, Xtr, Ytr, Xte, self.iterations)
+            k.train_matrix = Ktr
+            k.test_matrix = Kte
+            k.Ytr = Ytr
+            k.params["suffix"] = suffix
+            kernels.append(k)
+        return kernels
