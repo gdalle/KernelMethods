@@ -41,32 +41,22 @@ def build_datasets(suffix="mat100", indices=[0, 1, 2]):
     return datasets
 
 
-def center_K(K, Ytr):
-    n = Ytr.shape[0]
-    n_plus = np.sum(Ytr == 1)
-    n_minus = np.sum(Ytr == -1)
-    gamma = (
-        (Ytr == 1).astype(int) * (0.5 / n_plus) +
-        (Ytr == -1).astype(int) * (0.5 / n_minus)
-    )
-    u = K.dot(gamma)
-    v = np.tile(u, (n, 1))
-    w = gamma.dot(u)
-    Kc = K - v - v.T + w
+def center_K(K):
+    n = K.shape[0]
+    v = K.dot(np.ones(n) / n)
+    UK = np.tile(v, (n, 1))
+    UKU = K.sum() / n**2
+    Kc = K - UK - UK.T + UKU
     return Kc
 
 
-def correct_prediction_centering(K, Kx, Ytr, alpha):
-    n_plus = np.sum(Ytr == 1)
-    n_minus = np.sum(Ytr == -1)
-    gamma = (
-        (Ytr == 1).astype(int) * (0.5 / n_plus) +
-        (Ytr == -1).astype(int) * (0.5 / n_minus)
-    )
-    return (
-        - alpha.sum() * (gamma.reshape((1, -1)) * Kx).sum(axis=1)
-        - alpha.reshape((1, -1)).dot(K).dot(gamma)
-        + alpha.sum() * gamma.reshape((1, -1)).dot(K).dot(gamma)
+def predict_with_centering(K, Kx, alpha):
+    n = K.shape[0]
+    return np.sign(
+        + Kx.dot(alpha)
+        - alpha.sum() * Kx.sum(axis=1) / n
+        - (alpha[:, None] * K).sum() / n
+        + alpha.sum() * K.sum() / n**2
     )
 
 

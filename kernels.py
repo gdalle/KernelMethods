@@ -11,12 +11,13 @@ class Kernel:
 
     def __init__(self, name, params):
         self.name = name
+        params["center"] = params.get("center", True)
         self.params = params
         self.dataset_index = -1
         self.csv_storage = "data"  # or "features" or "gram"
-        self.train_matrix = None # K(Xtr, Xtr)
-        self.test_matrix = None # K(Xte, Xtr)
-        self.test_test_matrix = None # K(Xte, Xte)
+        self.train_matrix = None  # K(Xtr, Xtr)
+        self.test_matrix = None  # K(Xte, Xtr)
+        self.test_test_matrix = None  # K(Xte, Xte)
         self.Ytr = None
 
     def __str__(self):
@@ -34,20 +35,16 @@ class Kernel:
             self.dataset_index = d
             Xtr, Ytr, Xte = data
             k = copy.deepcopy(self)
-            if self.csv_storage == "data":
+            if self.csv_storage in ["data", "features"]:
                 m = Xtr.mean(axis=0)
                 s = Xtr.std(axis=0)
                 s[s < 1e-10] = 1
                 Xtr = (Xtr - m) / s
                 Xte = (Xte - m) / s
+            if self.csv_storage == "data":
                 k.train_matrix = k.apply(Xtr, Xtr)
                 k.test_matrix = k.apply(Xte, Xtr)
             elif self.csv_storage == "features":
-                m = Xtr.mean(axis=0)
-                s = Xtr.std(axis=0)
-                s[s < 1e-10] = 1
-                Xtr = (Xtr - m) / s
-                Xte = (Xte - m) / s
                 k.train_matrix = LinearKernel().apply(Xtr, Xtr)
                 k.test_matrix = LinearKernel().apply(Xte, Xtr)
             elif self.csv_storage == "gram":
@@ -56,7 +53,6 @@ class Kernel:
             k.Ytr = Ytr
             k.params["suffix"] = suffix
             kernels.append(k)
-
         return kernels
 
     def split_train_validation(self, train_idx, val_idx):
@@ -67,31 +63,33 @@ class Kernel:
         k.Ytr = self.Ytr[train_idx]
         return k
 
+    def create_predictor(self, K, alpha):
+        def predictor(Kx):
+            if self.params["center"]:
+                return backend.predict_with_centering(K, Kx, alpha)
+            else:
+                return np.sign(Kx.dot(alpha))
+        return predictor
+
     def compute_prediction(
         self, lambd,
         method="svm", solver="qp",
-        center=True
     ):
         Ytr = self.Ytr
 
-        K = self.train_matrix
-        Kc = backend.center_K(K, Ytr) if center else K
-        Kc += 1e-7 * np.eye(Ytr.shape[0])
+        if self.params["center"]:
+            K = backend.center_K(self.train_matrix)
+        else:
+            K = self.train_matrix
+        K += 1e-8 * np.eye(Ytr.shape[0])
 
         if method == "svm":
-            alpha = kernel_svm(Kc, Ytr, lambd, solver=solver)
+            alpha = kernel_svm(K, Ytr, lambd, solver=solver)
         elif method == "logreg":
-            alpha = kernel_logreg(Kc, Ytr, lambd)
+            alpha = kernel_logreg(K, Ytr, lambd)
 
-        def predictor(Kx):
-            f = Kx.dot(alpha)
-            if center:
-                f += backend.correct_prediction_centering(K, Kx, Ytr, alpha)
-            return np.sign(f)
-
-        K_test = self.test_matrix
-
-        return predictor(K), predictor(K_test)
+        predictor = self.create_predictor(self.train_matrix, alpha)
+        return predictor(self.train_matrix), predictor(self.test_matrix)
 
 
 class LinearKernel(Kernel):
@@ -122,6 +120,7 @@ class GaussianKernel(Kernel):
         )
         return result
 
+
 class CauchyKernel(Kernel):
 
     def __init__(self, sigma):
@@ -135,8 +134,8 @@ class CauchyKernel(Kernel):
         norm_X = np.linalg.norm(X, axis=1).reshape((-1, 1))
         norm_Y = np.linalg.norm(Y, axis=1).reshape((-1, 1))
         scal = X.dot(Y.T)
-        result = 1 / (1 +
-            (norm_X**2 - 2*scal + norm_Y.T**2) * self.params["sigma"]**2
+        result = 1 / (
+            1 + (norm_X**2 - 2*scal + norm_Y.T**2) * self.params["sigma"]**2
         )
         return result
 
@@ -175,11 +174,10 @@ class MultipleKernel(Kernel):
         self.kernels = loaded_kernels
         self.train_list = [kernel.train_matrix for kernel in self.kernels]
         self.test_list = [kernel.test_matrix for kernel in self.kernels]
-        # Temporary scaling until I learn how to center this shit
-        for i in range(self.M):
-            scale = np.abs(self.train_list[i]).mean()
-            self.train_list[i] /= scale
-            self.test_list[i] /= scale
+        if self.params["center"]:
+            self.train_centered_list = [
+                backend.center_K(kernel.train_matrix)
+                for kernel in self.kernels]
 
     def split_train_validation(self, train_idx, val_idx):
         """ Splits train_matrix for the cross_validation into train and test matrices """
@@ -200,24 +198,31 @@ class MultipleKernel(Kernel):
         self, lambd,
         method="svm", solver="qp",
     ):
+        Ytr = self.Ytr
+
+        if self.params["center"]:
+            K_list = self.train_centered_list
+        else:
+            K_list = self.train_list
+
         eta, alpha = multiple_kernel_svm(
-            self.train_list, self.Ytr,
+            K_list, self.Ytr,
             lambd,
             grad_step=self.grad_step, iterations=self.iterations,
             entropic=self.entropic,
             solver=solver
         )
+
         self.params["kernel_weights"] = eta
         train_matrix = sum(eta[i] * self.train_list[i] for i in range(self.M))
         test_matrix = sum(eta[i] * self.test_list[i] for i in range(self.M))
 
-        def predictor(Kx):
-            return np.sign(Kx.dot(alpha))
-
+        predictor = self.create_predictor(train_matrix, alpha)
         return predictor(train_matrix), predictor(test_matrix)
 
+
 class BoostingKernel(Kernel):
-    
+
     def __init__(self, vector_kernel=LinearKernel(), iterations=20):
         self.vector_kernel = vector_kernel
         self.iterations = iterations
@@ -227,7 +232,7 @@ class BoostingKernel(Kernel):
             "iterations": iterations,
         }
         super().__init__("BoostingKernel", params)
-    
+
     def load(self, suffix, indices):
         """Given a data suffix, computes the kernel matrices for each dataset"""
         kernels = []

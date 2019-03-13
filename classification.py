@@ -68,7 +68,7 @@ def multiple_kernel_svm(
 ):
     M = len(K_list)
     if M == 1:
-        return 1, kernel_svm(K_list[0], Ytr, lambd, solver)
+        return np.ones(1), kernel_svm(K_list[0], Ytr, lambd, solver)
     eta = np.ones(M) / M
     if type(grad_step) == type(lambda x: 1):
         steps = [grad_step(it) for it in range(iterations)]
@@ -79,7 +79,7 @@ def multiple_kernel_svm(
         alpha = kernel_svm(K, Ytr, lambd, solver)
         for i in range(M):
             grad_eta_i = - lambd * alpha.reshape((1, -1)).dot(K_list[i]).dot(alpha)
-            grad_eta_i += entropic * np.log(eta[i]+1e-10) # Entropic regularization
+            grad_eta_i += entropic * np.log(eta[i]+1e-10)  # Entropic regularization
             eta[i] -= steps[it] * grad_eta_i
         eta = projection_simplex(eta)
         print("Eta", eta)
@@ -112,6 +112,7 @@ def kernel_logreg(K, Ytr, lambd, iterations=10):
         alpha = solve_WKRR(K, w, z, lambd)
     return alpha
 
+
 def base_kernel_learner(K0, D, Xtr, Ytr, Xte):
     # A base kernel is basically K_w = w.dot(w.T) with w a vector
     # The kernel is thus K(x, y) = (x.w) (y.w)
@@ -119,12 +120,13 @@ def base_kernel_learner(K0, D, Xtr, Ytr, Xte):
     B = (Ytr * Ytr.T) * D
     K = K0.test_test_matrix
     m = K.shape[0]-1
-    eg = linalg.eigh(A.T.dot(B).dot(A), K, eigvals=(m,m))
+    eg = linalg.eigh(A.T.dot(B).dot(A), K, eigvals=(m, m))
     # Generalized eigenvector with the largest eigenvalue
     v = eg[1][:, 0]
     w = (v * Xte.T).T.sum(axis=0)
     w = (w / np.linalg.norm(w))
     return w
+
 
 def kernel_boosting(K0, Xtr, Ytr, Xte, steps):
     """
@@ -136,15 +138,15 @@ def kernel_boosting(K0, Xtr, Ytr, Xte, steps):
     K0.test_test_matrix = K0.apply(Xte, Xte) + 1e-10*np.eye(Xte.shape[0])
     Ktr = 0
     Kte = 0
-    Ytr = Ytr.reshape((-1,1))
+    Ytr = Ytr.reshape((-1, 1))
     for t in tqdm.tqdm(range(steps)):
         # Compute a distribution over the weights
-        D = np.exp(-(Ytr * Ytr.T) * Ktr) # ExpLoss
+        D = np.exp(-(Ytr * Ytr.T) * Ktr)  # ExpLoss
         # Compute the next update for train and test
         w = base_kernel_learner(K0, D, Xtr, Ytr, Xte)
-        Xtrw = Xtr.dot(w).reshape((-1,1))
+        Xtrw = Xtr.dot(w).reshape((-1, 1))
         Ktr_t = Xtrw.dot(Xtrw.T)
-        Xtew = Xte.dot(w).reshape((-1,1))
+        Xtew = Xte.dot(w).reshape((-1, 1))
         Kte_t = Xtew.dot(Xtrw.T)
         # Compute the update rate
         Sp = (Ytr * Ytr.T) * Ktr_t > 0
