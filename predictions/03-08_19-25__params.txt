@@ -1,0 +1,16 @@
+PREDICTION LOG - 03-08 19:25
+Dataset 0
+    Kernel name: BoostingKernel
+    Kernel params: {'vector_kernel': 'LinearKernel', 'iterations': 20, 'suffix': 'spectr5'}
+    Lambda 0.01
+    Training precision 0.708
+Dataset 1
+    Kernel name: BoostingKernel
+    Kernel params: {'vector_kernel': 'LinearKernel', 'iterations': 20, 'suffix': 'spectr5'}
+    Lambda 0.01
+    Training precision 0.76
+Dataset 2
+    Kernel name: BoostingKernel
+    Kernel params: {'vector_kernel': 'LinearKernel', 'iterations': 20, 'suffix': 'spectr5'}
+    Lambda 0.01
+    Training precision 0.6985
