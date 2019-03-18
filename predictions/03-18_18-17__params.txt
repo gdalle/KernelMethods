@@ -1,0 +1,16 @@
+PREDICTION LOG - 03-18 18:17
+Dataset 0
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['GaussianKernel', 'GaussianKernel', 'GaussianKernel'], 'kernel_params': [{'sigma': 50, 'center': True, 'suffix': 'shapespectr4'}, {'sigma': 50, 'center': True, 'suffix': 'tfidf6'}, {'sigma': 8, 'center': True, 'suffix': 'HMM_MCK2'}], 'grad_step': 0.5, 'iterations': 3, 'entropic': 1, 'center': True, 'kernel_weights': array([0.35499926, 0.35053219, 0.29446855])}
+    Lambda 0.00025118864315095795
+    Training precision 0.918
+Dataset 1
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['GaussianKernel', 'GaussianKernel', 'GaussianKernel'], 'kernel_params': [{'sigma': 50, 'center': True, 'suffix': 'shapespectr4'}, {'sigma': 50, 'center': True, 'suffix': 'tfidf6'}, {'sigma': 8, 'center': True, 'suffix': 'HMM_MCK2'}], 'grad_step': 0.5, 'iterations': 3, 'entropic': 1, 'center': True, 'kernel_weights': array([0.3506732 , 0.36357237, 0.28575442])}
+    Lambda 0.0001
+    Training precision 0.9985
+Dataset 2
+    Kernel name: MultipleKernel
+    Kernel params: {'kernel_names': ['GaussianKernel', 'GaussianKernel', 'GaussianKernel'], 'kernel_params': [{'sigma': 50, 'center': True, 'suffix': 'shapespectr4'}, {'sigma': 50, 'center': True, 'suffix': 'tfidf6'}, {'sigma': 8, 'center': True, 'suffix': 'HMM_MCK2'}], 'grad_step': 0.5, 'iterations': 3, 'entropic': 1, 'center': True, 'kernel_weights': array([0.35346601, 0.36330862, 0.28322537])}
+    Lambda 0.00015848931924611142
+    Training precision 0.982
