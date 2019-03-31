@@ -179,7 +179,8 @@ def tune_parameters(
 
 def final_prediction(
     three_kernels, three_lambdas,
-    method="svm", solver="qp"
+    method="svm", solver="qp",
+    simple_storage=False
 ):
 
     Ypred = []
@@ -205,21 +206,25 @@ def final_prediction(
     Ypred.index.name = "Id"
     Ypred.name = "Bound"
 
-    date = str(datetime.datetime.now())
-    date = date[5:-10]
-    date2 = "_".join(date.split())
-    date2 = "-".join(date2.split(":"))
+    if simple_storage:
+        Ypred.to_csv("Yte.csv", header=True)
 
-    Ypred.to_csv(
-        os.path.join("predictions", date2 + "__Ypred.csv"),
-        header=True
-    )
+    else:
+        date = str(datetime.datetime.now())
+        date = date[5:-10]
+        date2 = "_".join(date.split())
+        date2 = "-".join(date2.split(":"))
 
-    with open(os.path.join("predictions", date2 + "__params.txt"), "w") as file:
-        file.write("PREDICTION LOG - {}\n".format(date))
-        for d in range(3):
-            file.write("Dataset " + str(three_kernels[d].dataset_index) + "\n")
-            file.write("    " + "Kernel name: " + str(three_kernels[d].name) + "\n")
-            file.write("    " + "Kernel params: " + str(three_kernels[d].params) + "\n")
-            file.write("    " + "Lambda " + str(three_lambdas[d]) + "\n")
-            file.write("    " + "Training precision " + str(training_precisions[d]) + "\n")
+        Ypred.to_csv(
+            os.path.join("predictions", date2 + "__Ypred.csv"),
+            header=True
+        )
+
+        with open(os.path.join("predictions", date2 + "__params.txt"), "w") as file:
+            file.write("PREDICTION LOG - {}\n".format(date))
+            for d in range(3):
+                file.write("Dataset " + str(three_kernels[d].dataset_index) + "\n")
+                file.write("    " + "Kernel name: " + str(three_kernels[d].name) + "\n")
+                file.write("    " + "Kernel params: " + str(three_kernels[d].params) + "\n")
+                file.write("    " + "Lambda " + str(three_lambdas[d]) + "\n")
+                file.write("    " + "Training precision " + str(training_precisions[d]) + "\n")

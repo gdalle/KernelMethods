@@ -4,8 +4,8 @@ import numpy as np
 from scipy import linalg
 import scipy.sparse as sp
 
-import cvxpy as cp
-import osqp
+# import cvxpy as cp
+# import osqp
 from qpsolvers import solve_qp
 
 
@@ -82,7 +82,7 @@ def multiple_kernel_svm(
             grad_eta_i += entropic * np.log(eta[i]+1e-10)  # Entropic regularization
             eta[i] -= steps[it] * grad_eta_i
         eta = projection_simplex(eta)
-        print("Eta", eta)
+        # print("Eta", eta)
     K = sum(eta[i] * K_list[i] for i in range(M))
     alpha = kernel_svm(K, Ytr, lambd, solver)
     return eta, alpha
