@@ -29,7 +29,7 @@ for dataset in [0, 1, 2]:
     ]
     best_kernel = MultipleKernel(
         kernels_to_combine,
-        grad_step=1, iterations=3, entropic=1
+        grad_step=1, iterations=3, entropic=1.2
     )
     three_kernels.append(best_kernel)
 
